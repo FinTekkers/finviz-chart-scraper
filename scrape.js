@@ -26,8 +26,13 @@ async function scrape(ticker, timeframe) {
 
   const chromePath = findChrome();
   const launchOpts = {
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
+    ],
+    protocolTimeout: 120000,
   };
   if (chromePath) {
     launchOpts.executablePath = chromePath;
@@ -39,6 +44,11 @@ async function scrape(ticker, timeframe) {
   await page.setUserAgent(
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   );
+
+  // Hide webdriver flag to avoid bot detection
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  });
 
   const captured = [];
 
@@ -67,7 +77,12 @@ async function scrape(ticker, timeframe) {
   });
 
   const quoteUrl = `https://finviz.com/quote.ashx?t=${ticker}&ta=1&p=${timeframe}`;
-  await page.goto(quoteUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+  console.error(`Navigating to ${quoteUrl}...`);
+  await page.goto(quoteUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  console.error('Page loaded, waiting for chart data...');
+
+  // Wait for network to settle (chart data loads async)
+  await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {});
 
   // Wait for chart to render — the chart loads asynchronously
   await page.waitForFunction(

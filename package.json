@@ -7,7 +7,8 @@
     "chart": "node cli.js chart",
     "stocks": "node cli.js stocks",
     "futures": "node cli.js futures",
-    "forex": "node cli.js forex"
+    "forex": "node cli.js forex",
+    "validate": "node validate.js"
   },
   "keywords": ["finviz", "stock", "chart", "scraper"],
   "license": "MIT",

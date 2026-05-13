@@ -1,8 +1,8 @@
 # finviz-chart-scraper
 
-Extract historical price data from [finviz.com](https://finviz.com) stock charts as CSV.
+Extract financial market data from [finviz.com](https://finviz.com) using Puppeteer network interception.
 
-Finviz loads chart data asynchronously via JavaScript. This tool uses Puppeteer to load the page in a headless browser, intercept network responses, and extract the underlying price data.
+Supports: **stocks** (with sector/industry metadata), **futures** (with exchange info), **forex** pairs, and **chart data** (OHLCV time series).
 
 ## Setup
 
@@ -13,46 +13,84 @@ npm install
 ## Usage
 
 ```bash
-# Basic: scrape daily chart data for a ticker
-node scrape.js AAPL
+# Chart data for a ticker (OHLCV CSV)
+node cli.js chart AAPL              # daily
+node cli.js chart AAPL w            # weekly
+node cli.js chart AAPL m            # monthly
 
-# Specify timeframe: d=daily, w=weekly, m=monthly
-node scrape.js AAPL w
+# Stock listings with metadata (sector, industry, country, market cap, P/E)
+node cli.js stocks                  # all exchanges
+node cli.js stocks nyse             # NYSE only
+node cli.js stocks nasdaq           # NASDAQ only
 
-# Custom output directory
-node scrape.js AAPL d ./data
+# Futures contracts (with exchange, contract info)
+node cli.js futures
 
-# Pipe CSV to stdout
-node scrape.js AAPL 2>/dev/null | head
+# Forex pairs (with rates)
+node cli.js forex
+```
+
+Or call scripts directly:
+
+```bash
+node scrape.js WOK d ./output          # chart data
+node scrape-stocks.js nasdaq ./output   # stock listings
+node scrape-futures.js ./output         # futures
+node scrape-forex.js ./output           # forex
 ```
 
 ## Output
 
-CSV with columns: `datetime,close,open,high,low,volume`
+### Chart data (`scrape.js`)
+- `output/<TICKER>_d.csv` — OHLCV time series
+- `output/<TICKER>_metadata.json` — sector, industry, fundamentals
 
-```
+```csv
 datetime,close,open,high,low,volume
 2024-01-02T00:00:00.000Z,185.64,187.15,188.44,183.89,82488700
-2024-01-03T00:00:00.000Z,184.25,184.22,185.88,183.43,58414500
-...
 ```
 
-Files are written to `./output/<TICKER>_<timeframe>.csv`.
+### Stock listings (`scrape-stocks.js`)
+- `output/stocks_<exchange>.csv`
+
+```csv
+ticker,company,sector,industry,country,market_cap,pe,price,change,volume
+AAPL,"Apple Inc.","Technology","Consumer Electronics",USA,3.54T,35.21,232.64,+0.52%,54321000
+```
+
+### Futures (`scrape-futures.js`)
+- `output/futures.csv` + `output/futures_raw.json`
+
+```csv
+name,ticker,last,change,change_pct,exchange
+Crude Oil,CL,103.38,+1.20,+1.17%,NYMEX
+```
+
+### Forex (`scrape-forex.js`)
+- `output/forex.csv` + `output/forex_raw.json`
+
+```csv
+pair,base,quote,last,change,change_pct
+EUR/USD,EUR,USD,1.1709,-0.0029,-0.25%
+```
 
 ## How it works
 
-1. Launches a headless Chrome via Puppeteer
-2. Navigates to the finviz quote page with chart enabled
-3. Intercepts all network responses, looking for JSON/CSV chart data
-4. Parses multiple data formats (OHLCV objects, TradingView-style arrays, CSV)
-5. Also checks inline `<script type="application/json">` blocks and global JS variables
-6. Deduplicates and sorts by date
+All finviz pages load data asynchronously via JavaScript. Static HTML scraping doesn't work. This tool:
+
+1. Launches headless Chrome via Puppeteer
+2. Hides webdriver flag to avoid bot detection
+3. Navigates to the target page, waits for JS to execute
+4. Intercepts network responses for JSON/CSV data
+5. Extracts data from the rendered DOM (tables, data attributes)
+6. Parses multiple data formats (OHLCV objects, TradingView-style arrays)
 7. Outputs as CSV
 
-If no structured data is found in network responses, raw response bodies are dumped to `output/<TICKER>_raw_responses.json` for debugging.
+Raw responses are dumped to JSON for debugging when structured parsing fails.
 
 ## Troubleshooting
 
-- **No data found**: Finviz may rate-limit or block headless browsers. Try adding a delay or using `headless: false` in `scrape.js`.
-- **Browser won't launch**: Ensure Chrome/Chromium is installed. Puppeteer downloads its own Chromium by default.
-- **Rate limited (429)**: Wait and retry. Finviz limits requests per IP.
+- **Navigation timeout**: Finviz may be slow or rate-limiting. Increase timeout in the script or retry.
+- **No data found**: Check `output/*_raw.json` for the actual page content to tune parsing.
+- **Rate limited (429)**: Wait ~15 minutes and retry.
+- **Browser won't launch**: The scraper auto-detects system Chrome. Install Chrome or let Puppeteer download Chromium (`PUPPETEER_SKIP_DOWNLOAD=false npm install`).

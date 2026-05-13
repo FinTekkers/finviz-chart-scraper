@@ -126,6 +126,37 @@ async function scrape(ticker, timeframe) {
     return results;
   });
 
+  // Extract stock metadata (sector, industry, fundamentals)
+  const metadata = await page.evaluate(() => {
+    const data = {};
+    const cells = document.querySelectorAll('td.snapshot-td2');
+    const labels = document.querySelectorAll('td.snapshot-td2-cp');
+    if (cells.length === 0) {
+      // Alternative selector patterns
+      const allTds = document.querySelectorAll('table td');
+      const kvPairs = [];
+      for (let i = 0; i < allTds.length - 1; i++) {
+        const key = allTds[i].textContent.trim();
+        const val = allTds[i + 1].textContent.trim();
+        if (['Index', 'Sector', 'Industry', 'Country', 'Exchange', 'Market Cap',
+             'P/E', 'EPS (ttm)', 'Insider Own', 'Inst Own', 'Short Float',
+             'Dividend', 'Dividend %', 'Beta', '52W High', '52W Low',
+             'RSI (14)', 'Avg Volume', 'Volume', 'Perf Week', 'Perf Month',
+             'Perf Quarter', 'Perf Half Y', 'Perf Year', 'Perf YTD',
+             'Employees', 'Optionable', 'Shortable', 'Earnings',
+             'SMA20', 'SMA50', 'SMA200'].includes(key)) {
+          data[key] = val;
+        }
+      }
+    } else {
+      for (let i = 0; i < labels.length && i < cells.length; i++) {
+        data[labels[i].textContent.trim()] = cells[i].textContent.trim();
+      }
+    }
+    return data;
+  });
+
+
   await browser.close();
 
   // Parse captured network responses for chart data
@@ -142,7 +173,7 @@ async function scrape(ticker, timeframe) {
     process.exit(1);
   }
 
-  return chartData;
+  return { chartData, metadata };
 }
 
 function extractChartData(captured, inlineData) {
@@ -299,13 +330,20 @@ function toCsv(points, includeOhlcv) {
 
 (async () => {
   try {
-    const data = await scrape(TICKER, TIMEFRAME);
-    const csv = toCsv(data, true);
+    const { chartData, metadata } = await scrape(TICKER, TIMEFRAME);
+    const csv = toCsv(chartData, true);
 
     if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
     const outFile = path.join(OUTPUT_DIR, `${TICKER}_${TIMEFRAME}.csv`);
     fs.writeFileSync(outFile, csv);
-    console.error(`Wrote ${data.length} data points to ${outFile}`);
+    console.error(`Wrote ${chartData.length} data points to ${outFile}`);
+
+    // Write metadata
+    if (metadata && Object.keys(metadata).length > 0) {
+      const metaFile = path.join(OUTPUT_DIR, `${TICKER}_metadata.json`);
+      fs.writeFileSync(metaFile, JSON.stringify(metadata, null, 2));
+      console.error(`Wrote metadata (${Object.keys(metadata).length} fields) to ${metaFile}`);
+    }
 
     // Also print to stdout for piping
     console.log(csv);

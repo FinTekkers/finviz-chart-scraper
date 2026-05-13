@@ -4,8 +4,10 @@
   "description": "Extract chart data from finviz.com as CSV using Puppeteer network interception",
   "main": "scrape.js",
   "scripts": {
-    "scrape": "node scrape.js",
-    "test": "node scrape.js AAPL"
+    "chart": "node cli.js chart",
+    "stocks": "node cli.js stocks",
+    "futures": "node cli.js futures",
+    "forex": "node cli.js forex"
   },
   "keywords": ["finviz", "stock", "chart", "scraper"],
   "license": "MIT",

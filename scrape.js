@@ -2,6 +2,21 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
+function findChrome() {
+  const candidates = [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 const TICKER = process.argv[2] || 'AAPL';
 const TIMEFRAME = process.argv[3] || 'd'; // d=daily, w=weekly, m=monthly
 const OUTPUT_DIR = process.argv[4] || './output';
@@ -9,10 +24,16 @@ const OUTPUT_DIR = process.argv[4] || './output';
 async function scrape(ticker, timeframe) {
   console.error(`Scraping ${ticker} (timeframe=${timeframe})...`);
 
-  const browser = await puppeteer.launch({
+  const chromePath = findChrome();
+  const launchOpts = {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+  };
+  if (chromePath) {
+    launchOpts.executablePath = chromePath;
+    console.error(`Using system Chrome: ${chromePath}`);
+  }
+  const browser = await puppeteer.launch(launchOpts);
 
   const page = await browser.newPage();
   await page.setUserAgent(
